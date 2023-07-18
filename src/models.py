@@ -4,15 +4,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
-import matplotlib.pyplot as plt
 import src.attacks as attacks
 
 
 class MNISTModule(pl.LightningModule):
+    """
+    Base class for neural network models for mnist dataset.
+    """
     def __init__(self):
         super().__init__()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
+        """
+        Pytorch lightning training step. Includes model step and logging.
+        :param batch: batch data (features and targets)
+        :param batch_idx: batch index
+        :return: model loss
+        """
         loss, accuracy = self._step(batch)
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         if accuracy is not None:
@@ -20,6 +28,12 @@ class MNISTModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
+        """
+        Pytorch lightning validation step. Includes model step and logging.
+        :param batch: batch data (features and targets)
+        :param batch_idx: batch index
+        :return: model loss
+        """
         loss, accuracy = self._step(batch)
         self.log("validation/loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         if accuracy is not None:
@@ -27,6 +41,12 @@ class MNISTModule(pl.LightningModule):
         return loss
 
     def test_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
+        """
+        Pytorch lightning test step. Includes model step and logging.
+        :param batch: batch data (features and targets)
+        :param batch_idx: batch index
+        :return: model loss
+        """
         loss, accuracy = self._step(batch)
         self.log("test/loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         if accuracy is not None:
@@ -42,28 +62,25 @@ class MNISTModule(pl.LightningModule):
 
     @staticmethod
     def get_accuracy(predicted, target):
+        """
+        Compute prediction accuracy of classification model.
+        :param predicted: classifier predictions [batch_size, n_classes]
+        :param target: target of prediction [batch_size]
+        :return:
+        """
         accuracy = (torch.max(predicted, 1)[1] == target).sum().item() / float(predicted.shape[0])
         return accuracy
 
-    def plot_recon(self, dataset, path):
-        for b_idx, (batch, _) in enumerate(dataset.validation_dataloader()):
-            if b_idx < 1:
-                for idx, sample in enumerate(batch):
-                    if idx < 10:
-                        recon, mu, log_var = self.forward(sample)
-                        plot_array = torch.stack((sample.squeeze(), recon.squeeze()), axis=1).view(self.image_size,
-                                                                                                   self.image_size*2)
-                        plt.matshow(plot_array.detach().numpy(), cmap='Greys')
-                        plt.savefig(os.path.join(path, f'recon_{idx}.png'))
-                        plt.close()
-                    else:
-                        break
-            else:
-                break
-
 
 class Classifier(MNISTModule):
+    """
+    Classification model for MNIST dataset
+    """
     def __init__(self, n_classes: int = 10):
+        """
+        Neural network classifier for MNIST dataset with convolutional and linear layers.
+        :param n_classes: number of classes, normally 10 for MNIST
+        """
         super().__init__()
         self.save_hyperparameters()
         self.conv1 = nn.Conv2d(1, 16, kernel_size=5)
@@ -73,7 +90,12 @@ class Classifier(MNISTModule):
         self.fc2 = nn.Linear(50, n_classes)
         self.loss_function = nn.CrossEntropyLoss()
 
-    def forward(self, x):
+    def forward(self, x: torch.tensor):
+        """
+        Forward pass through model.
+        :param x: input data
+        :return: prediction
+        """
         batch_size = x.shape[0]
         x = F.max_pool2d(F.relu(self.conv1(x)), 2)
         x = F.max_pool2d(F.relu(self.conv2(x)), 2)
@@ -93,7 +115,16 @@ class Classifier(MNISTModule):
 
 
 class AdvClassifier(Classifier):
+    """
+    Adversarially trained classifier for MNIST dataset.
+    """
     def __init__(self, n_classes: int = 10, attack_name='PGD', eps=0.1):
+        """
+        Neural network classifier for MNIST dataset trained on adversarially perturbed data.
+        :param n_classes: number of classes (usually 10 for MNIST)
+        :param attack_name: name of the adversarial attack, e.g. FGSM, PGD
+        :param eps: magnitude of the attack (float (0, 1))
+        """
         super().__init__(n_classes)
         self.save_hyperparameters()
         self.attack = self._initialize_attack(attack_name, eps)
@@ -109,6 +140,12 @@ class AdvClassifier(Classifier):
         return atk
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
+        """
+        Modified training step for adversarial training. Includes model step and logging.
+        :param batch: input batch (features and targets)
+        :param batch_idx: batch index
+        :return: model loss
+        """
         features, targets = batch
         targets = targets.to(self.current_device)
         features = features.to(self.current_device)
@@ -130,6 +167,11 @@ class SelectiveNet(MNISTModule):
     Implementation of Selective Net by Geifman & El-Yaniv https://arxiv.org/abs/1901.09192
     """
     def __init__(self, coverage: float, alpha: float = 0.5):
+        """
+        Selective Net for MNIST classification with integrated reject option.
+        :param coverage: target coverage of the model [0, 1)
+        :param alpha: weighting factor of selective and cross entropy loss
+        """
         super().__init__()
         self.save_hyperparameters()
         self.coverage = coverage
@@ -188,7 +230,17 @@ class SelectiveNet(MNISTModule):
 
 
 class AdvSelectiveNet(SelectiveNet):
+    """
+    Adversarially trained Selective Net for MNIST classification.
+    """
     def __init__(self, coverage: float, alpha: float = 0.5, attack_name='PGD', eps=0.1):
+        """
+        Selective Net for MNIST dataset trained on adversarially perturbed data.
+        :param coverage: target coverage (0, 1]
+        :param alpha: weighting factor of selective and cross entropy loss
+        :param attack_name: name of the adversarial attack, e.g. FGSM, PGD
+        :param eps: magnitude of the attack (float (0, 1))
+        """
         super().__init__(coverage, alpha)
         self.save_hyperparameters()
         self.attack = self._initialize_attack(attack_name, eps)
@@ -222,7 +274,15 @@ class AdvSelectiveNet(SelectiveNet):
 
 
 class VAE(MNISTModule):
+    """
+    VAE for reconstruction of MNIST images. Can be used within several selective prediction approaches.
+    """
     def __init__(self, bottleneck_dim: int = 2, beta: float = 1.):
+        """
+        Linear beta VAE for MNIST.
+        :param bottleneck_dim: dimension of the bottleneck
+        :param beta: weighting factor for KLD and MSE loss.
+        """
         super().__init__()
         self.image_size = 32
         self.beta = beta
@@ -277,17 +337,16 @@ class VAE(MNISTModule):
 
 
 class SelectiveLoss(nn.Module):
+    """
+    Loss class for Selective Net. Loss considers coverage and prediction result.
+    """
     def __init__(self, loss_func, coverage: float, lm: float = 32.0):
         """
-        Args:
-            loss_func: base loss function. E.g. nn.CrossEntropyLoss() for classification
-            coverage: target coverage.
-            lm: Lagrange multiplier for coverage constraint.
+        loss_func: base loss function. E.g. nn.CrossEntropyLoss() for classification
+        coverage: target coverage
+        lm: Lagrange multiplier for coverage constraint
         """
         super().__init__()
-        assert 0.0 < coverage <= 1.0
-        assert 0.0 < lm
-
         self.loss_func = loss_func
         self.coverage = coverage
         self.lm = lm
@@ -295,10 +354,10 @@ class SelectiveLoss(nn.Module):
 
     def forward(self, prediction_out, selection_out, target):
         """
-        Args:
-            prediction_out: prediction output of Selective Net
-            selection_out: selection output of Selective Net
-            target: target of prediction
+        Compute loss for given prediction and selection output of Selective Net.
+        prediction_out: prediction output of Selective Net
+        selection_out: selection output of Selective Net
+        target: target of prediction
         """
         empirical_coverage = selection_out.mean()
 
