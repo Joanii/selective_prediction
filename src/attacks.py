@@ -8,6 +8,34 @@ class Attack:
         self.model = model
         self.device = next(model.parameters()).device
 
+    def forward(self, *inputs):
+        raise NotImplementedError
+
+    def __call__(self, *inputs):
+        self.model.eval()
+        adv_data = self.forward(*inputs)
+        return adv_data
+
+
+class Clean(Attack):
+    def __init__(self, model):
+        super().__init__(model, 'Clean')
+
+    def forward(self, data, labels):
+        adv_data = data.clone().detach().to(self.device)
+        return adv_data
+
+
+class GN(Attack):
+    def __init__(self, model, std=0.1):
+        super().__init__(model, 'GN')
+        self.std = std
+
+    def forward(self, data, labels):
+        data = data.clone().detach().to(self.device)
+        adv_images = data + self.std*torch.randn_like(data)
+        return adv_images.detach()
+
 
 class FGSM(Attack):
     def __init__(self, model, eps=0.1, is_image=False, loss_type='cross_entropy'):
