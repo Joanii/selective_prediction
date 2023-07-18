@@ -376,10 +376,11 @@ class SelectiveLoss(nn.Module):
 if __name__ == '__main__':
     from pytorch_lightning.callbacks import ModelCheckpoint
     import argparse
-    from dataset import MnistDataModule
+    from src.dataset import MnistDataModule
 
     parser = argparse.ArgumentParser(description='Train neural network models')
     parser.add_argument('--model_type', required=True, help='vae, clf, adv_clf, sel or adv_sel')
+    parser.add_argument('--epochs', required=True, type=int, help='number of training epochs')
     args = parser.parse_args()
     if args.model_type == 'vae':
         model = VAE(bottleneck_dim=3, beta=0.5)
@@ -397,6 +398,5 @@ if __name__ == '__main__':
     logger = loggers.TensorBoardLogger(os.path.join('models', args.model_type), name='lightning_logs')
     dataset = MnistDataModule()
     checkpoint_callback = ModelCheckpoint(monitor="validation/loss")
-    gpus = [1] if torch.cuda.is_available() else 'None'
-    trainer = pl.Trainer(max_epochs=200, callbacks=[checkpoint_callback], logger=logger, gpus=[1])
+    trainer = pl.Trainer(max_epochs=args.epochs, callbacks=[checkpoint_callback], logger=logger)
     trainer.fit(model, dataset.train_dataloader(), dataset.validation_dataloader())

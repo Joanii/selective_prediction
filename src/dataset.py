@@ -14,7 +14,7 @@ class MnistDataModule(pl.LightningDataModule):
         :param train_valid_split: proportion between train and validation data
         """
         super().__init__()
-        path = os.path.join(os.path.dirname(__file__), '../..', 'data')
+        path = os.path.join(os.path.dirname(__file__), '..', 'data')
         if not os.path.exists(path):
             os.makedirs(path)
         self.batch_size = batch_size
@@ -22,8 +22,8 @@ class MnistDataModule(pl.LightningDataModule):
             torchvision.transforms.Resize((32, 32)),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.1307,), (0.3081,))])
-        self.test_set = datasets.MNIST(root=path, train=False, download=False, transform=transforms)
-        self.train_set = datasets.MNIST(root=path, train=True, download=False, transform=transforms)
+        self.test_set = datasets.MNIST(root=path, train=False, download=True, transform=transforms)
+        self.train_set = datasets.MNIST(root=path, train=True, download=True, transform=transforms)
         len_train = int(train_valid_split * len(self.train_set))
         len_valid = len(self.train_set) - len_train
         self.train_set, self.valid_set = torch.utils.data.random_split(self.train_set, [len_train, len_valid])
