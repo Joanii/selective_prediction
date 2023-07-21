@@ -384,7 +384,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.model_type == 'vae':
         model = VAE(bottleneck_dim=3, beta=0.5)
-        args.model_type = 'vae_beta'
     elif args.model_type == 'clf':
         model = Classifier()
     elif args.model_type == 'adv_clf':
